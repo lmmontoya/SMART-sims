@@ -1,0 +1,16 @@
+"a1","a2.if.fail","a2.if.succ","truth"
+"soc","outreach","continue",0.737555504728132
+"sms","outreach","continue",0.688406738770686
+"voucher","outreach","continue",0.688389563238771
+"soc","sms.voucher","continue",0.731362508865248
+"sms","sms.voucher","continue",0.681382634751773
+"voucher","sms.voucher","continue",0.68139085106383
+"soc","navigator","continue",0.72851076713948
+"sms","navigator","continue",0.679512547281324
+"voucher","navigator","continue",0.679503238179669
+"sms","outreach","stop",0.70796979964539
+"voucher","outreach","stop",0.707985878250591
+"sms","sms.voucher","stop",0.700955558510638
+"voucher","sms.voucher","stop",0.700940304964539
+"sms","navigator","stop",0.699085223404255
+"voucher","navigator","stop",0.699094165484634

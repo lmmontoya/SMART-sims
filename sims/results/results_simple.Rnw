@@ -1,0 +1,218 @@
+\documentclass[11pt]{article}
+%\usepackage[showframe]{geometry}
+\usepackage[table]{xcolor}
+\usepackage{caption}
+\usepackage{lscape,verbatim,mathrsfs}
+\usepackage{graphics,amsmath,pstricks}
+\usepackage{amssymb,enumerate}
+\usepackage{amsbsy,amsmath,amsthm,amsfonts, amssymb}
+\usepackage{graphicx, rotate, array}
+\usepackage{geometry,multirow}
+\usepackage{color,soul}
+\usepackage{float}
+%\usepackage{hyperref}
+\usepackage[authoryear,round]{natbib}
+%\renewcommand{\baselinestretch}{1.9}
+\usepackage{tcolorbox}
+\renewcommand{\familydefault}{cmss}
+\textwidth=6.65in \textheight=9.7in
+\parskip=.025in
+\parindent=0in
+\oddsidemargin=-0.1in \evensidemargin=-.1in \headheight=-.6in
+\footskip=0.5in \DeclareMathOperator*{\argmax}{argmax}
+\DeclareMathOperator*{\argmin}{argmin}
+
+
+\begin{document}
+
+
+\title{SMART simulation - All Simulated (Simple) Covariates}
+\date{}
+
+\maketitle
+
+
+
+<<echo = F, warning = F, message = F>>=
+library(dplyr)
+library(ggplot2)
+library(xtable)
+library('latex2exp')
+knitr::opts_chunk$set(comment = NA
+                      , warning = FALSE
+                      , message = FALSE
+                      , tidy = TRUE)
+knitr::opts_knit$set(root.dir = '../../')
+@
+
+
+<<echo = F>>=
+load(file = "sims/truths.RData")
+write.csv(truth_simple, file = "sims/truths_simple.csv", row.names = F)
+load(file = "sims/results/simresults_simple.RData")
+truth = truth_simple
+rm(truth_realcovs, truth_simple)
+source(file = "sims/results/make_res.R")
+@
+
+
+
+
+
+<<echo = F, results = 'asis'>>=
+est = c("IPTW.g0", "IPTW.gn.unadj", "IPTW.gn.adj", "Gcomp.gn.adj", "TMLE.gn.adj")
+bias = abs(data.frame(do.call('rbind', lapply(est, function(x) make_res(x)$bias))))
+var = data.frame(do.call('rbind', lapply(est, function(x) make_res(x)$var)))
+ci_width = data.frame(do.call('rbind', lapply(est, function(x) make_res(x)$ci_width)))
+cov_ind = data.frame(do.call('rbind', lapply(est, function(x) make_res(x)$cov_ind*100)))
+cov_simult = data.frame(do.call('rbind', lapply(est, function(x) make_res(x)$simult_cov_simult*100)))
+
+colnames(cov_simult) = "Coverage"
+colnames(bias) = colnames(var) = colnames(ci_width) = colnames(cov_ind) = names(results[[1]]$IPTW.g0.psi)
+bias$Estimator = var$Estimator = ci_width$Estimator = cov_ind$Estimator = cov_simult$Estimator = est
+
+cov_simult = cov_simult[cov_simult$Estimator != "Gcomp.gn.adj",]
+
+cov_ind_df = tidyr::gather(data.frame(cov_ind), "rule", "cov_ind", 1:8)
+cov_ind_df$rule = as.factor(substr(cov_ind_df$rule, start = 2, stop = nchar(cov_ind_df$rule)))
+cov_ind_df$rule = as.factor(as.numeric(cov_ind_df$rule))
+cov_ind_df = cov_ind_df[cov_ind_df$Estimator != "Gcomp.gn.adj",]
+
+bias_df = tidyr::gather(data.frame(bias), "rule", "bias", 1:8)
+bias_df$rule = as.factor(substr(bias_df$rule, start = 2, stop = nchar(bias_df$rule)))
+bias_df$rule = as.factor(as.numeric(bias_df$rule))
+bias_df$Estimator = factor(bias_df$Estimator, levels = c("IPTW.g0", "IPTW.gn.unadj", "IPTW.gn.adj", "Gcomp.gn.adj", "TMLE.gn.adj"))
+bias = bias_df %>%
+  ggplot(aes(x = rule, y = bias, group = Estimator)) +
+  geom_point(aes(shape = Estimator), size = 3) +
+  ylab("Absolute Bias") +
+  theme_bw() +
+  theme(panel.border = element_blank()) +
+  theme(text = element_text(size = 16)) +
+ # xlab("Embedded Regime #") +
+  scale_shape_manual(name = "Estimator", values = c(1,2,3,4,5), labels = c("IPTW.g0" = parse(text = TeX('Min. adj. IPW w/ $g_0$')),
+                                                                    "IPTW.gn.adj" = 'Full adj. IPW',
+                                                                    "IPTW.gn.unadj" = parse(text = TeX('Min. adj. IPW w/ $g_n$')),
+                                                                    "TMLE.gn.adj" = 'Full adj. TMLE',
+                                                                    "Gcomp.gn.adj" = 'Full adj. G-comp.'))
+bias
+
+
+var_df = tidyr::gather(data.frame(var), "rule", "var", 1:8)
+var_df$rule = as.factor(substr(var_df$rule, start = 2, stop = nchar(var_df$rule)))
+var_df$rule = as.factor(as.numeric(var_df$rule))
+var_df = var_df[var_df$Estimator != "Gcomp.gn.adj",]
+var_df$Estimator = factor(var_df$Estimator, levels = c("IPTW.g0", "IPTW.gn.unadj", "IPTW.gn.adj", "TMLE.gn.adj"))
+var = var_df %>%
+  ggplot(aes(x = rule, y = var, group = Estimator)) +
+  geom_point(aes(shape = Estimator), size = 3) +
+  ylab("Variance of Estimates \n Over Simulation Repetitions") +
+  theme_bw() +
+  theme(panel.border = element_blank()) +
+  theme(text = element_text(size = 16)) +
+ # xlab("Embedded Regime #") +
+  scale_shape_manual(name = "Estimator", values = c(1,2,3,5), labels = c("IPTW.g0" = parse(text = TeX('Min. adj. IPW w/ $g_0$')),
+                                                                    "IPTW.gn.adj" = 'Full adj. IPW',
+                                                                    "IPTW.gn.unadj" = parse(text = TeX('Min. adj. IPW w/ $g_n$')),
+                                                                    "TMLE.gn.adj" = 'Full adj. TMLE'))
+var
+
+ci_width_df = tidyr::gather(data.frame(ci_width), "rule", "ci_width", 1:8)
+ci_width_df$rule = as.factor(substr(ci_width_df$rule, start = 2, stop = nchar(ci_width_df$rule)))
+ci_width_df$rule = as.factor(as.numeric(ci_width_df$rule))
+ci_width_df = ci_width_df[ci_width_df$Estimator != "Gcomp.gn.adj",]
+ci_width_df$Estimator = factor(ci_width_df$Estimator, levels = c("IPTW.g0", "IPTW.gn.unadj", "IPTW.gn.adj", "TMLE.gn.adj"))
+ci = ci_width_df %>%
+  ggplot(aes(x = rule, y = ci_width, group = Estimator)) +
+  geom_point(aes(shape = Estimator), size = 3) +
+  ylab("Average Confidence Interval Width") +
+  theme_bw() +
+  theme(panel.border = element_blank()) +
+  theme(text = element_text(size = 16)) +
+ # xlab("Embedded Regime #") +
+  scale_shape_manual(name = "Estimator", values = c(1,2,3,5), labels = c("IPTW.g0" = parse(text = TeX('Min. adj. IPW w/ $g_0$')),
+                                                                    "IPTW.gn.adj" = 'Full adj. IPW',
+                                                                    "IPTW.gn.unadj" = parse(text = TeX('Min. adj. IPW w/ $g_n$')),
+                                                                    "TMLE.gn.adj" = 'Full adj. TMLE'))
+
+ci
+@
+
+<<echo = F>>=
+library(ggpubr)
+
+png(filename="sims/results/plot_sim_simple.png", width = 700, height = 500)
+leg = get_legend(bias)
+bias = bias + theme(legend.position = "none")
+var = var + theme(legend.position = "none")
+ci = ci + theme(legend.position = "none") 
+figure <- ggarrange(bias + rremove("xlab"), var + rremove("xlab"), ci + rremove("xlab"), leg,
+                    ncol = 2, nrow = 2)
+
+annotate_figure(figure, bottom = text_grob("Embedded Regime #", size = 16), top = text_grob("Simulation Performance Results: DGP 1",  size = 20))
+#figure
+
+dev.off()
+
+
+#dp <- ggdotplot(ToothGrowth, x = "dose", y = "len",
+#                color = "dose", palette = "jco",
+#                legend = "right")
+
+#leg <- get_legend(dp)
+#dp <- dp + theme(legend.position = "none")
+#ggarrange(dp, dp, dp,  leg, ncol = 2, nrow = 2)
+
+
+@
+
+
+<<echo = F>>=
+df = left_join(bias_df, var_df, by = c("Estimator", "rule"))
+df = left_join(df, ci_width_df, by = c("Estimator", "rule"))
+df = left_join(df, cov_ind_df, by = c("Estimator", "rule"))
+df = left_join(df, cov_simult, by = c("Estimator"))
+
+df = df[order(df$rule),]
+df = df[,c("rule", "Estimator", "bias", "var", "ci_width", "cov_ind", "Coverage")]
+colnames(df) = c("Rule", "Estimator", "Bias", "Var.", "C.I. Width", "Ind. Cov. (%)", "Simult. Cov. (%)")
+df$Estimator = recode(df$Estimator, 
+                      Gcomp.gn.adj = "Full adj. G-comp.",
+                      IPTW.g0 = "Min. adj. IPW (w/ $g_0$)",
+                      IPTW.gn.unadj = "Min. adj. IPW (w/ $g_n$)",
+                      IPTW.gn.adj = "Full adj. IPTW",
+                      TMLE.gn.adj = "Full adj. TMLE")
+write.csv(df, file = "sims/results/results_simple.csv", row.names = F)
+@
+
+Calcs
+<<echo = F>>=
+range(df$Bias[df$Estimator == "Full adj. G-comp."])*100
+range(lapply(1:8, function(i) df$Bias[df$Estimator == "Full adj. G-comp." & df$Rule == i]/df$Bias[df$Estimator != "Full adj. G-comp." & df$Rule == i]))
+
+range(lapply(1:8, function(i) df$Var.[df$Estimator == "Min. adj. IPW (w/ $g_0$)" & df$Rule == i]/df$Var.[df$Estimator != "Min. adj. IPW (w/ $g_0$)" & df$Rule == i]), na.rm = T)
+
+range(df$Bias/sqrt(df$Var.), na.rm = T)
+range(df$`Ind. Cov. (%)`[df$Estimator == "Min. adj. IPW (w/ $g_n$)"], na.rm = T)
+range(df$`Simult. Cov. (%)`[df$Estimator == "Min. adj. IPW (w/ $g_n$)"], na.rm = T)
+
+range(df$Var.[df$Estimator == "Min. adj. IPW (w/ $g_n$)"]/df$Var.[df$Estimator == "Full adj. IPTW"])
+
+range(lapply(1:8, function(i) df$Var.[df$Estimator != "Full adj. TMLE" & df$Rule == i]/df$Var.[df$Estimator == "Full adj. TMLE" & df$Rule == i]), na.rm = T)
+range(lapply(1:8, function(i) df$`C.I. Width`[df$Estimator != "Full adj. TMLE" & df$Rule == i]/df$`C.I. Width`[df$Estimator == "Full adj. TMLE" & df$Rule == i]), na.rm = T)
+
+range(df$`Ind. Cov. (%)`[df$Estimator == "Full adj. TMLE"])
+range(df$`Simult. Cov. (%)`[df$Estimator == "Full adj. TMLE"])
+@
+
+
+
+
+
+
+
+
+
+
+
+\end{document}

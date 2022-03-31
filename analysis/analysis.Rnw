@@ -1,0 +1,141 @@
+\documentclass[11pt]{article}
+%\usepackage[showframe]{geometry}
+\usepackage{caption}
+\usepackage{lscape,verbatim,mathrsfs}
+\usepackage{graphics,amsmath,pstricks}
+\usepackage{amssymb,enumerate}
+\usepackage{amsbsy,amsmath,amsthm,amsfonts, amssymb}
+\usepackage{graphicx, rotate, array}
+\usepackage{geometry,multirow}
+\usepackage{color,soul}
+\usepackage{float}
+\usepackage{datetime}
+%\usepackage{hyperref}
+\usepackage[authoryear,round]{natbib}
+%\renewcommand{\baselinestretch}{1.9}
+\usepackage{tcolorbox}
+\renewcommand{\familydefault}{cmss}
+\textwidth=6.65in \textheight=9.7in
+\parskip=.025in
+\parindent=0in
+\oddsidemargin=-0.1in \evensidemargin=-.1in \headheight=-.6in
+\footskip=0.5in \DeclareMathOperator*{\argmax}{argmax}
+\DeclareMathOperator*{\argmin}{argmin}
+
+
+\begin{document}
+%\SweaveOpts{concordance=TRUE}
+\part*{Primary Analysis Objective 4 for Viral Suppression}
+\today
+\currenttime
+
+Definition: outcome $Y$ is indicator that person was virally suppressed at year 2 (i.e., $Y = 1$ if person suppressed, $Y=0$ if non-suppressed). People with missing $Y$ were excluded. 
+
+
+<<r settings, include = FALSE>>=
+knitr::opts_chunk$set(comment = NA
+                      , warning = FALSE
+                      , message = FALSE
+                      , tidy = TRUE)
+knitr::opts_knit$set(root.dir = '../')
+library(dplyr)
+library(tableone)
+library(SL.ODTR)
+library(SuperLearner)
+library(ggplot2)
+@
+
+%\section{Start = initial randomization, End = 2 years after enrollment}
+<<echo = F>>=
+load(file = "analysis/results_analysis.RData")
+
+@
+
+
+\section{15 Sequential Interventions}
+
+\subsection{With Simultaneous CIs}
+<<echo = F>>=
+res_df = data.frame(Type = factor(rep(c("Min. adj.", "Full adj."), each = 15)),
+                  Int = factor(c(1:15, 1:15)),
+                  Estimates = c(results_unadj_ADAPT$TMLE.unadj.psi, results_adj_ADAPT$TMLE.adj.psi),
+                  lowerCI = c(results_unadj_ADAPT$TMLE.unadj.CI_simult[,1], results_adj_ADAPT$TMLE.adj.CI_simult[,1]),
+                  upperCI = c(results_unadj_ADAPT$TMLE.unadj.CI_simult[,2], results_adj_ADAPT$TMLE.adj.CI_simult[,2]))
+res_df
+
+pd <- position_dodge(width = 0.7)
+toprint = res_df %>%
+  ggplot(aes(x = Int, y = Estimates, group = Type)) +
+  geom_point(position = pd, size = 3, shape = 15) +
+  geom_point(aes(colour = Type), shape = 15, position = pd, size = 2.5) +
+  geom_errorbar(aes(ymin = lowerCI, ymax = upperCI), width = .4, position = pd) +
+  scale_x_discrete(name ="Embedded Regime #") +
+  ylab("Probability of Viral Suppression") +
+  theme_bw() +
+  theme(panel.border = element_blank()) +
+  ggtitle("Estimated Values of ADAPT-R's Embedded Regimes")
+
+toprint
+
+png("analysis/ADAPT_results.png", height = 400, width = 500)
+toprint
+dev.off()
+
+@
+
+Width of Min. Adj. CIs are this times larger than Full. Adj. CIs
+<<echo = F>>=
+width_minadj = results_unadj_ADAPT$TMLE.unadj.CI_simult[,2] - results_unadj_ADAPT$TMLE.unadj.CI_simult[,1]
+width_fulladj = results_adj_ADAPT$TMLE.adj.CI_simult[,2] - results_adj_ADAPT$TMLE.adj.CI_simult[,1]
+range(width_minadj/width_fulladj)
+@
+
+<<echo = F>>=
+# most effective
+results_adj_ADAPT$TMLE.adj.psi[which.max(results_adj_ADAPT$TMLE.adj.psi)]
+results_adj_ADAPT$TMLE.adj.CI_simult[which.max(results_adj_ADAPT$TMLE.adj.psi),]
+
+# least effective
+results_adj_ADAPT$TMLE.adj.psi[which.min(results_adj_ADAPT$TMLE.adj.psi)]
+results_adj_ADAPT$TMLE.adj.CI_simult[which.min(results_adj_ADAPT$TMLE.adj.psi),]
+@
+
+Contrasts
+<<echo = F>>=
+#compare = "sms_sms.voucher_continue"
+cont_fun = function(compare) {
+  
+  diff = results_adj_ADAPT$TMLE.adj.psi[compare] -
+    results_adj_ADAPT$TMLE.adj.psi["soc_outreach_continue"]
+  IC = results_adj_ADAPT$TMLE.adj.IC[,compare] -
+    results_adj_ADAPT$TMLE.adj.IC[,"soc_outreach_continue"]
+  CI = diff + c(-1,1)*qnorm(.975)*sqrt(var(IC)/length(IC))
+  return(c(diff = diff, CI = CI))
+  
+}
+
+cont_fun("sms_sms.voucher_continue")
+cont_fun("voucher_sms.voucher_continue")
+cont_fun("sms_navigator_continue")
+cont_fun("voucher_navigator_continue")
+cont_fun("voucher_outreach_stop")
+
+@
+
+
+<<echo = F>>=
+library(dplyr)
+results = bind_rows(res_df[1:15,], setNames(res_df[16:30,], names(res_df[1:15,]))) %>% 
+           arrange(Int)
+results = results[,c(2, 1, 3, 4, 5)]
+results$Estimate = paste0(round(results$Estimates, 4), " [", round(results$lowerCI, 4), ", ", round(results$upperCI, 4), "]")
+results$Estimates = results$lowerCI = results$upperCI = NULL
+results$rel_CI_width = rep(round(width_minadj/width_fulladj, 2), each = 2)
+colnames(results) = c("Embedded Regime #", "Adjustment Set", "Estimate [95% CI]", "Relative CI Width")
+write.csv(results, file = "analysis/ADAPT_results.csv", row.names = F)
+@
+
+
+
+
+\end{document}
